@@ -1,8 +1,6 @@
 <?php
 
-namespace Example1;
-
-class Foo
+class Example1
 {
     /**
      * @tc_takes xAsInteger, xAsString, xAsBoolean, xAsEmptyArray, xAsPopulatedArray, validGlobal, invalidGlobal

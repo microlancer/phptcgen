@@ -7,6 +7,6 @@ class GeneratorTest extends \PHPUnit_Framework_TestCase
     public function testConstructor()
     {
         $generator = new \PhpTcGen\Generator\Generator;
-        $this->assertIsObject($generator);
+        $this->assertInstanceOf('PhpTcGen\Generator\Generator', $generator);
     }
 }
