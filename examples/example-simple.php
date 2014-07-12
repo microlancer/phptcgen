@@ -6,8 +6,8 @@ class Foo
 {
     /**
      * @tc_takes xAsInteger, xAsString, xAsBoolean, xAsEmptyArray, xAsPopulatedArray, validGlobal, invalidGlobal
-     * @uses nothing
-     * @may throwBadGlobalException, throwBadInputException
+     * @tc_uses nothing
+     * @tc_may throwBadGlobalException, throwBadInputException
      */
     public function multiplyByGlobalPi($x)
     {

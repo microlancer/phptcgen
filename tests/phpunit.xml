@@ -1,0 +1,35 @@
+<phpunit
+        backupGlobals="false"
+        backupStaticAttributes="false"
+        cacheTokens="true"
+        colors="true"
+        convertErrorsToExceptions="true"
+        convertNoticesToExceptions="true"
+        convertWarningsToExceptions="true"
+        forceCoversAnnotation="false"
+        mapTestClassNameToCoveredClassName="false"
+        printerClass="PHPUnit_TextUI_ResultPrinter"
+        processIsolation="false"
+        stopOnError="true"
+        stopOnFailure="true"
+        stopOnIncomplete="false"
+        stopOnSkipped="false"
+        strict="true"
+        verbose="true"
+    >
+    <testsuites>
+        <testsuite name="phptcgen">
+            <directory>./</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <ini name="date.timezone" value="America/Los_Angeles"/>
+    </php>
+    <filter>
+      <whitelist addUncoveredFilesFromWhitelist="true">
+        <directory suffix=".php">../src/</directory>
+        <exclude>
+        </exclude>
+      </whitelist>
+    </filter>
+</phpunit>
