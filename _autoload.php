@@ -3,12 +3,12 @@
  * Setup autoloading
  */
 
-include_once __DIR__ . '/../vendor/autoload.php';
+include_once __DIR__ . '/vendor/autoload.php';
 
 $loader = new Zend\Loader\StandardAutoloader(
     array(
         Zend\Loader\StandardAutoloader::LOAD_NS => array(
-            'PhpTcGen' => __DIR__ . '/../src/',
+            'PhpTcGen' => __DIR__ . '/src/',
         ),
     )
 );
