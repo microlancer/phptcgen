@@ -11,7 +11,7 @@ class Example2
      * @tc_takes xAsTrue xAsFalse xAsNonBoolean
      *
      * @comment_tc_uses Here, we specify methods (dependencies) that will be fetched in planning the test cases.
-     * @tc_uses Example1::multiplyByGlobalPi
+     * @tc_uses \Example1::multiplyByGlobalPi
      *
      * @comment_tc_may Here, we specify outcomes that you feel are relevant. There may be tons of outcomes 
      * (out of memory, disk failure, exceptions, return values, etc.) but only the ones that you feel are worthy and

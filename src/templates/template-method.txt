@@ -1,0 +1,11 @@
+    /**
+     * Test %TCGEN_CLASSNAME%::%TCGEN_METHODNAME%() for %REASON%
+     */
+    public function test%TCGEN_METHODNAME_UCFIRST%()
+    {
+        // ... Put your test code here ...
+
+        // ... Put your assertions here ...
+        $this->assertTrue(false);
+        $this->markTestIncomplete();
+    }

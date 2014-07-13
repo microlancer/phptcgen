@@ -4,7 +4,6 @@ class Example1
 {
     /**
      * @tc_takes xAsInteger, xAsString, xAsBoolean, xAsEmptyArray, xAsPopulatedArray, validGlobal, invalidGlobal
-     * @tc_uses nothing
      * @tc_may throwBadGlobalException, throwBadInputException
      */
     public function multiplyByGlobalPi($x)

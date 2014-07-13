@@ -2,16 +2,19 @@
 
 namespace PhpTcGen\Generator;
 
-use DocBlock\Parser;
+use \DocBlock\Parser;
+use \Zend\Filter\Word\CamelCaseToSeparator;
 
 class Generator
 {
+    const VERSION = '1.0.0';
 
     private $inputDir;
     private $inputFile;
     private $outputDir;
     private $outputFile;
     private $files;
+    private $outcomes;
 
     public function __construct()
     {
@@ -20,6 +23,7 @@ class Generator
         $this->outputDir = null;
         $this->outputFile = null;
         $this->files = array();
+        $this->outcomes = array();
     }
 
     public function createTestCases($input, $output)
@@ -29,7 +33,7 @@ class Generator
         }
 
         if (is_readable($input) && is_dir($input)) {
-            $this->inputDir = $input;
+            $this->inputDir = preg_replace('/(\/)+$/', '', trim($input)); // remove trailing slashes
         } else if (is_readable($input) && is_file($input)) {
             $this->inputFile = $input;
         } else {
@@ -37,14 +41,14 @@ class Generator
         }
         
         if (is_readable($output) && is_dir($output)) {
-            $this->outputDir = $output;
+            $this->outputDir = preg_replace('/(\/)+$/', '', trim($output)); // remove trailing slashes
         } else if (is_readable($output) && is_file($output)) {
             $this->outputFile = $output;
         } else if (preg_match('/.*\.php$/', $output)) {
             $this->outputFile = $output;
         } else {
             mkdir($output);
-            $this->outputDir = $output;
+            $this->outputDir = preg_replace('/(\/)+$/', '', trim($output)); // remove trailing slashes
         }
 
         if ($this->inputDir && $this->outputFile) {
@@ -54,7 +58,7 @@ class Generator
         if ($this->inputFile) {
             $this->processInputFile();
         } else {
-            $this->processInputDir($this->inputDir);
+            $this->processInputDir();
         }
     }
 
@@ -86,11 +90,10 @@ class Generator
         $dir->close();
     }
 
-    private function processInputDir($inputDir)
+    private function getAnnotationsForFiles()
     {
-        $this->getFiles($inputDir);
         foreach ($this->files as $key => $file) {
-            include_once $inputDir . '/' . $file['path'] . $file['file'];
+            include_once $this->inputDir . '/' . $file['path'] . $file['file'];
             $className = str_replace('/', '\\', $file['path']) . $file['class'];
             //$obj = new $className();
             $parser = new Parser();
@@ -108,7 +111,6 @@ class Generator
                     'uses' => array(),
                     'may' => array(),
                 );
-                $takes = array();
                 foreach ($annotations as $annotation)
                 {
                     switch ($annotation->getName()) {
@@ -125,9 +127,126 @@ class Generator
                             throw new \Exception('Unexpected annotation name: ' . $annotation->getName());
                     }
                 }
+                $methodKey = '\\' . str_replace('/', '\\', $file['path']) . $file['class'] . '::' . $method->getName();
+                $this->dependencies[$methodKey] = $tcArray['uses'];
+                $this->outcomes[$methodKey] = $tcArray['may'];
             }
             $this->files[$key]['methods'][$method->getName()] = $tcArray;
         }
         var_dump($this->files);
+        var_dump($this->dependencies);
+//        var_dump($this->outcomes);
+    }
+
+    private function getAllOutcomesByMethod($method)
+    {
+
+        // Direct outcomes
+        if (!empty($this->outcomes[$method])) {
+            $ret = $this->outcomes[$method];
+        } else {
+            // No direct outcomes
+            $ret = array();
+        }
+
+        // The possible outcomes based on dependencies of $method
+        if (!empty($this->dependencies[$method])) {
+            foreach ($this->dependencies[$method] as $dependency) {
+                $ret = array_merge($ret, $this->getAllOutcomesByMethod($dependency));
+            }
+        }
+
+        
+        return $ret;
+    }
+
+    private function processInputDir()
+    {
+        $this->getFiles($this->inputDir . '/');
+        $this->getAnnotationsForFiles();
+
+        foreach ($this->files as $file) {
+            $testFile = $this->outputDir . '/' . $file['path'] . $file['class'] . 'Test.php';
+            if (!is_dir(dirname($testFile))) {
+                mkdir(dirname($testFile), 0777, true);
+            }
+            $testPhpCode = file_get_contents(__DIR__ . '/../templates/template-class.txt');
+            $testMethods = array();
+
+            foreach ($file['methods'] as $methodName => $tcArray) {
+
+                // @tc_takes test cases
+                foreach ($tcArray['takes'] as $takes) {
+                    $testMethodName = ucfirst($methodName) . 'Takes' . ucfirst($takes);
+
+                    $c = new CamelCaseToSeparator();
+                    $c->setSeparator(' ');
+                    $reason = 'when input is ' . strtolower($c->filter($takes));
+
+                    $testPhpMethod = file_get_contents(__DIR__ . '/../templates/template-method.txt');
+
+                    $testPhpMethod = str_replace('%TCGEN_METHODNAME%', $methodName, $testPhpMethod);
+                    $testPhpMethod = str_replace('%TCGEN_METHODNAME_UCFIRST%', $testMethodName, $testPhpMethod);
+                    $testPhpMethod = str_replace('%REASON%', $reason, $testPhpMethod);
+                    $testPhpMethod = str_replace('%TCGEN_CLASSNAME%', $file['class'], $testPhpMethod);
+
+                    $testMethods[] = $testPhpMethod;
+                }
+                
+                // @tc_uses test cases
+
+                foreach ($tcArray['uses'] as $uses) {
+
+                    $usesFullClass = '';
+
+                    if (!preg_match('#::.+$#', $uses)) {
+                        throw new \Exception(
+                            '@tc_uses dependency format should be \\YourNamespace\\YourClass::methodName; got: ' .
+                            $uses);
+                    }
+
+                    list($usesFullClass, $usesMethodName) = explode('::', $uses);
+
+                    
+                    $usesNamespace = preg_replace('#\\.*?$#', '', $usesFullClass);
+                    $usesClass = preg_replace('#.*\\\#', '', $usesFullClass);
+
+                    $outcomes = $this->getAllOutcomesByMethod($uses);
+
+                    foreach ($outcomes as $outcome) {
+
+                        $testMethodName = ucfirst($methodName) . 'Uses' . ucfirst($usesMethodName);
+                        $testMethodName = ucfirst($methodName) . 'When' . ucfirst($usesMethodName) . ucfirst($outcome);
+
+                        $c = new CamelCaseToSeparator();
+                        $c->setSeparator(' ');
+                        $reason = 'when dependency of call to ' . $uses . '() results in ' . $outcome;
+
+                        $testPhpMethod = file_get_contents(__DIR__ . '/../templates/template-method.txt');
+
+                        $testPhpMethod = str_replace('%TCGEN_METHODNAME%', $methodName, $testPhpMethod);
+                        $testPhpMethod = str_replace('%TCGEN_METHODNAME_UCFIRST%', $testMethodName, $testPhpMethod);
+                        $testPhpMethod = str_replace('%REASON%', $reason, $testPhpMethod);
+                        $testPhpMethod = str_replace('%TCGEN_CLASSNAME%', $file['class'], $testPhpMethod);
+
+                        $testMethods[] = $testPhpMethod;
+                    }
+                }
+            }
+
+            $testNamespace = 'Test';
+
+            if ($file['path']) {
+                $testNamespace .= '\\' . preg_replace('#\\\$#', '', str_replace('/', '\\', $file['path']));
+            }
+
+            $testPhpCode = str_replace('%TCGEN_TESTNAMESPACE%', $testNamespace, $testPhpCode);
+            $testPhpCode = str_replace('%TCGEN_CLASSNAME%', $file['class'], $testPhpCode);
+            $testPhpCode = str_replace('%TCGEN_TESTCLASSNAME%', $file['class'] . 'Test', $testPhpCode);
+            $testPhpCode = str_replace('%TCGEN_METHODS%', implode("\n\n", $testMethods), $testPhpCode);
+            $testPhpCode = str_replace('%TCGEN_VERSION%', self::VERSION, $testPhpCode);
+
+            file_put_contents($testFile, $testPhpCode);
+        }
     }
 }
