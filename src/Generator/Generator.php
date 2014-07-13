@@ -133,9 +133,6 @@ class Generator
             }
             $this->files[$key]['methods'][$method->getName()] = $tcArray;
         }
-        var_dump($this->files);
-        var_dump($this->dependencies);
-//        var_dump($this->outcomes);
     }
 
     private function getAllOutcomesByMethod($method)
