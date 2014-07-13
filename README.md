@@ -3,6 +3,8 @@ phptcgen
 
 Automatic Dependency-Aware PHPUnit Test Case Generator
 
+[![Build Status](https://travis-ci.org/thorie7912/phptcgen.svg?branch=master)](https://travis-ci.org/thorie7912/phptcgen)
+
 ## What is phptcgen?
 
 Have you ever been in a situation where coming up with all the test cases for a particular method, including integration tests, is a tiresome practice of digging through a deep dependency tree of code?
