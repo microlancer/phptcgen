@@ -9,6 +9,7 @@ $loader = new Zend\Loader\StandardAutoloader(
     array(
         Zend\Loader\StandardAutoloader::LOAD_NS => array(
             'PhpTcGen' => __DIR__ . '/src/',
+            'Example2' => __DIR__ . '/examples/Example2/',
         ),
     )
 );

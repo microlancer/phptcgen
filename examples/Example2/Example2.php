@@ -26,4 +26,9 @@ class Example2
         }
         return false;
     }
+
+    public function bar()
+    {
+        
+    }
 }
