@@ -5,6 +5,9 @@ namespace PhpTcGen\Generator;
 use \DocBlock\Parser;
 use \Zend\Filter\Word\CamelCaseToSeparator;
 
+/**
+ * Test case generator class
+*/
 class Generator
 {
     const VERSION = '1.0.0';
