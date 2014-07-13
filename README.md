@@ -1,7 +1,7 @@
 phptcgen
 ========
 
-Automatic Dependency Test Case Generator for PHP using DocBlocks
+Automatic Dependency-Aware PHPUnit Test Case Generator
 
 ## What is phptcgen?
 
