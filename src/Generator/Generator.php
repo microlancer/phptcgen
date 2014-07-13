@@ -18,9 +18,11 @@ class Generator
     private $outputFile;
     private $files;
     private $outcomes;
+    private $verbose;
 
     public function __construct()
     {
+        $this->verbose = null;
         $this->inputDir = null;
         $this->inputFile = null;
         $this->outputDir = null;
@@ -36,7 +38,7 @@ class Generator
         }
 
         if (is_readable($input) && is_dir($input)) {
-            $this->inputDir = preg_replace('/(\/)+$/', '', trim($input)); // remove trailing slashes
+            $this->inputDir = preg_replace('/(\\/)+$/', '', trim($input)); // remove trailing slashes
         } else if (is_readable($input) && is_file($input)) {
             $this->inputFile = $input;
         } else {
@@ -78,16 +80,23 @@ class Generator
             if (in_array($file, array('.', '..'))) {
                 continue;
             }
-            if (is_dir($dir->path . $file)) {
-                $this->getFiles($dir->path . $file, $prefix . $file . '/');
-            } else {
-                echo 'Adding file: ' . $prefix . $file . "\n";
+
+            $fullFile = preg_replace('/(\\/)+$/', '', $dir->path) . '/' . $file;
+            if (is_dir($fullFile)) {
+                $this->getFiles($fullFile, $prefix . $file . '/');
+            } else if (is_file($fullFile) && is_readable($fullFile) && preg_match('#.php$#', $file)) {
+                if ($this->verbose) {
+                    echo 'Adding file: ' . $prefix . $file . "\n";
+                }
                 $this->files[] = array(
                     'path' => $prefix,
                     'file' => $file,
                     'class' => str_replace('.php', '', $file),
                     'methods' => array(),
                 );
+            } else {
+                // Skip any non-readable, non-php files.
+                echo 'Skipping file: ' . $fullFile . "\n";
             }
         }
         $dir->close();
@@ -95,25 +104,85 @@ class Generator
 
     private function getAnnotationsForFiles()
     {
+        echo "Processing " . count($this->files) . ' files.' . "\n";
+
         foreach ($this->files as $key => $file) {
-            include_once $this->inputDir . '/' . $file['path'] . $file['file'];
-            $className = str_replace('/', '\\', $file['path']) . $file['class'];
-            //$obj = new $className();
+
+            // We should be parsing the source, rather than loading it. Then we wouldn't have to worry about
+            // executing the code (and missing include file dependencies, etc.).
+            $includeFile = $this->inputDir . '/' . $file['path'] . $file['file'];
+
+            exec("php -l $includeFile", $output, $return);
+
+            if ($return !== 0) {
+                echo $output;
+                echo "!!! Warning: Unable to include " . $includeFile . " due to PHP syntax errors.\n";
+                unset($this->files[$key]);
+                continue;
+            }
+
+            $className = '\\' . str_replace('/', '\\', $file['path']) . $file['class'];
+
+            if (class_exists($className, false) || interface_exists($className, false)) {
+
+                // Class was already previously loaded.
+                echo "!!! Warning: Unable to load previously loaded class: $className ($includeFile)\n";
+                unset($this->files[$key]);
+                continue;
+
+            }
+
+            include_once $includeFile;
+
             $parser = new Parser();
+
+            if (interface_exists($className, false)) {
+                echo "!!! Skipping interface class: $className\n";
+                unset($this->files[$key]);
+                continue;
+            }
+
+            if (!class_exists($className, false)) {
+                // Todo: We need to handle Abstract class methods somehow.
+                echo "!!! Warning: Unable to load class: $className (perhaps abstract or interface)\n";
+                unset($this->files[$key]);
+                continue;
+            }
+
+
+            echo "Analyzing $className\n";
+
             $parser->analyze($className);
             $methods = $parser->getMethods();
+
+            if (!is_array($methods)) {
+                echo "!!! Warning: Unable to get methods of class " . $className . "\n";
+                unset($this->files[$key]);
+                continue;
+            } else {
+
+//                echo "Found " . count($methods) . ' methods' . "\n";
+
+            }
+
             foreach($methods as $method)
             {
 
                 $annotations = $method->getAnnotations(array("tc_takes", "tc_uses", "tc_may"));
-                if (!is_array($annotations)) {
+
+                if (!is_array($annotations) || empty($annotations)) {
+//                    echo "No annotations\n";
                     continue;
                 }
+                
+                echo "Found " . count($annotations) . " annotations.\n";
+
                 $tcArray = array(
                     'takes' => array(),
                     'uses' => array(),
                     'may' => array(),
                 );
+
                 foreach ($annotations as $annotation)
                 {
                     switch ($annotation->getName()) {
@@ -133,14 +202,19 @@ class Generator
                 $methodKey = '\\' . str_replace('/', '\\', $file['path']) . $file['class'] . '::' . $method->getName();
                 $this->dependencies[$methodKey] = $tcArray['uses'];
                 $this->outcomes[$methodKey] = $tcArray['may'];
+                $this->files[$key]['methods'][$method->getName()] = $tcArray;
             }
-            $this->files[$key]['methods'][$method->getName()] = $tcArray;
+            
         }
     }
 
     private function getAllOutcomesByMethod($method)
     {
 
+        list($className, $methodName) = explode('::', $method);
+        if (!method_exists($className, $methodName)) {
+            throw new \Exception("Unable to find $className::$methodName\n");
+        }
         // Direct outcomes
         if (!empty($this->outcomes[$method])) {
             $ret = $this->outcomes[$method];
@@ -167,6 +241,7 @@ class Generator
 
         foreach ($this->files as $file) {
             $testFile = $this->outputDir . '/' . $file['path'] . $file['class'] . 'Test.php';
+            echo "Creating $testFile\n";
             if (!is_dir(dirname($testFile))) {
                 mkdir(dirname($testFile), 0777, true);
             }
@@ -216,11 +291,11 @@ class Generator
                     foreach ($outcomes as $outcome) {
 
                         $testMethodName = ucfirst($methodName) . 'Uses' . ucfirst($usesMethodName);
-                        $testMethodName = ucfirst($methodName) . 'When' . ucfirst($usesMethodName) . ucfirst($outcome);
+                        $testMethodName = ucfirst($methodName) . 'When' . ucfirst($usesClass) . ucfirst($usesMethodName) . ucfirst($outcome);
 
                         $c = new CamelCaseToSeparator();
                         $c->setSeparator(' ');
-                        $reason = 'when dependency of call to ' . $uses . '() results in ' . $outcome;
+                        $reason = 'when dependency of call to ' . $uses . '() results in ' . strtolower($c->filter($outcome));
 
                         $testPhpMethod = file_get_contents(__DIR__ . '/../templates/template-method.txt');
 
@@ -241,6 +316,7 @@ class Generator
             }
 
             $testPhpCode = str_replace('%TCGEN_TESTNAMESPACE%', $testNamespace, $testPhpCode);
+            $testPhpCode = str_replace('%TCGEN_FULLCLASSNAME%', '\\' . str_replace('/', '\\', $file['path']) . $file['class'], $testPhpCode);
             $testPhpCode = str_replace('%TCGEN_CLASSNAME%', $file['class'], $testPhpCode);
             $testPhpCode = str_replace('%TCGEN_TESTCLASSNAME%', $file['class'] . 'Test', $testPhpCode);
             $testPhpCode = str_replace('%TCGEN_METHODS%', implode("\n\n", $testMethods), $testPhpCode);

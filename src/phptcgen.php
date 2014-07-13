@@ -1,7 +1,18 @@
 #!/usr/bin/env php
 <?php
 
-include '_autoload.php';
+// Autoloader for the phptcgen application
+include __DIR__ . '/../_autoload.php';
+
+// Autoloader for the target application (always checks relative to current execution folder)
+if (file_exists('./autoload.php')) {
+    include './autoload.php';
+} else {
+    echo "\n";
+    echo "!!! Warning: No ./autoload.php file defined; you may be unable to load your target sources.\n";
+    echo "             For an example autoload.php, see user-autoload-example.php in phptcgen directory.\n";
+    echo "\n";
+}
 
 use PhpTcGen\Generator\Generator;
 
